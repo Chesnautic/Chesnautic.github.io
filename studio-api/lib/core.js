@@ -125,7 +125,18 @@ export async function tt(path, token, { method = "POST", json, query = "" } = {}
   const r = await fetch(`${TT}${path}${query}`, { method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=UTF-8" }, body: json ? JSON.stringify(json) : undefined });
   const j = await r.json().catch(() => ({}));
   const err = j.error && j.error.code && j.error.code !== "ok" ? j.error : null;
-  if (!r.ok || err) throw httpError(r.status >= 500 ? 502 : 400, `TikTok: ${err?.message || err?.code || r.status}`);
+  if (!r.ok || err) {
+    const code = err?.code || "";
+    const FRIENDLY = {
+      unaudited_client_can_only_post_to_private_accounts: "TikTok only lets apps that haven't passed review post to PRIVATE accounts. In the TikTok app: Profile > Settings and privacy > Privacy > turn on Private account, then try again (you can switch it back after the test).",
+      spam_risk_too_many_posts: "TikTok says this account has posted too many times today. Try again tomorrow.",
+      spam_risk_user_banned_from_posting: "TikTok isn't letting this account post right now.",
+      reached_active_user_cap: "This app has reached TikTok's daily limit of posting accounts. Try again tomorrow.",
+      access_token_invalid: "The TikTok login expired. Disconnect and connect TikTok again.",
+      scope_not_authorized: "This TikTok account didn't approve posting. Disconnect and connect TikTok again, and approve every permission.",
+    };
+    throw httpError(r.status >= 500 ? 502 : 400, FRIENDLY[code] || `TikTok: ${err?.message || code || r.status}${code ? ` (${code})` : ""}`);
+  }
   return j.data || {};
 }
 

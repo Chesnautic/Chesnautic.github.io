@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E The Experience</title>
+<meta name="description" content="E The Experience, rapper from Kissimmee, Florida. Creek Bay Records.">
+<meta property="og:title" content="E The Experience">
+<meta property="og:description" content="Rapper from Kissimmee, Florida. Creek Bay Records.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root { --pink: #FF1F5A; --ink: #0A0A0A; --paper: #F4F1EC; --dim: rgba(244,241,236,.6); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--ink); color: var(--paper); font-family: "Archivo", system-ui, sans-serif;
+         min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+  main { flex: 1; display: flex; flex-direction: column; justify-content: center;
+         max-width: 960px; width: 100%; margin: 0 auto; padding: 64px 20px; }
+  .kicker { font-size: 12px; letter-spacing: .3em; text-transform: uppercase; color: var(--dim); }
+  h1 { font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase;
+       font-size: clamp(44px, 13vw, 120px); line-height: .92; letter-spacing: .01em; margin: 14px 0 22px; }
+  h1 span { color: var(--pink); display: block; }
+  p.line { max-width: 34ch; font-size: 18px; color: var(--dim); }
+  nav { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 40px; }
+  nav a { color: var(--paper); text-decoration: none; border: 1px solid rgba(244,241,236,.25);
+          padding: 12px 18px; font-size: 13px; letter-spacing: .18em; text-transform: uppercase;
+          transition: border-color .2s, background .2s, color .2s; }
+  nav a:hover, nav a:focus-visible { border-color: var(--pink); background: var(--pink); color: var(--ink); outline: none; }
+  footer { max-width: 960px; width: 100%; margin: 0 auto; padding: 24px 20px;
+           display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+           font-size: 12px; color: var(--dim); border-top: 1px solid rgba(244,241,236,.12); }
+  footer a { color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Kissimmee, FL &middot; Creek Bay Records</p>
+  <h1>E The <span>Experience</span></h1>
+  <p class="line">Rapper. Making music for anyone stuck in their own head.</p>
+  <nav aria-label="Links">
+    <a href="https://www.instagram.com/evan.rms/">Instagram</a>
+    <a href="https://www.tiktok.com/@etheexp">TikTok</a>
+    <!-- EDIT: add the YouTube channel URL -->
+    <a href="https://creekbayrecords.com">Creek Bay Records</a>
+  </nav>
+</main>
+<footer>
+  <span>&copy; <span id="y">2026</span> E The Experience</span>
+  <a href="privacy.html">Privacy</a>
+</footer>
+<script>document.getElementById("y").textContent = new Date().getFullYear();</script>
+</body>
+</html>

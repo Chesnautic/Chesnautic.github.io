@@ -1,0 +1,6 @@
+{
+  "name": "content-studio-api",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" }
+}

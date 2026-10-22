@@ -151,7 +151,9 @@ export async function saveTokens(tok) {
 export async function accessToken(openId) {
   const f = await readFile(tokenPath(openId));
   if (!f) throw httpError(401, "This TikTok account isn't connected. Connect it again.");
-  let rec = decrypt(f.text.trim());
+  let rec;
+  try { rec = decrypt(f.text.trim()); }
+  catch { throw httpError(401, "This TikTok login was saved with a different app key. Disconnect and connect TikTok again."); }
   if (Date.now() > rec.expires_at) rec = await saveTokens({ ...(await refresh(rec.refresh_token)), open_id: openId });
   return rec.access_token;
 }

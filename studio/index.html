@@ -69,6 +69,8 @@
   .status { border-radius: 10px; padding: 12px; background: var(--ink); border: 1px solid var(--line); display: grid; gap: 4px; }
   .status b.ok { color: var(--ok); } .status b.bad { color: var(--bad); }
   .err { color: var(--bad); }
+  .hi { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; font-size: 13px; }
+  .hi b { font-size: 14px; } .hi .ok { color: var(--ok); } .hi .bad { color: var(--bad); } .hi .wait { color: var(--dim); }
   footer { margin-top: 48px; color: var(--dim); font-size: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
   footer a { color: var(--dim); }
   [hidden] { display: none !important; }
@@ -99,6 +101,8 @@
     <section class="panel">
       <h3>Video queue</h3>
       <div class="queue" id="queue"><p class="empty">Loading videos…</p></div>
+      <h3 style="margin-top:22px">Recent posts</h3>
+      <div class="queue" id="history"><p class="empty">Nothing sent yet.</p></div>
     </section>
 
     <section class="panel" id="composerPanel">
@@ -204,7 +208,7 @@
     if (!session) return;
     let cached = null; try { cached = JSON.parse(store.get("cs_user") || "null"); } catch (e) {}
     setAccount(cached, null);
-    loadQueue();
+    await loadQueue(); loadHistory();
   }
 
   async function loadQueue() {
@@ -220,11 +224,37 @@
         const d = document.createElement("span"); d.textContent = new Date(it.date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
         m.append(ch, d);
         const t = document.createElement("span"); t.className = "t"; t.textContent = it.title;
-        b.append(m, t);
+        b.append(m, t); NAMES[it.video_asset] = it.channel_label + ": " + it.title;
         b.onclick = () => { box.querySelectorAll(".qi").forEach((x) => x.setAttribute("aria-pressed", "false")); b.setAttribute("aria-pressed", "true"); openComposer(it); };
         box.append(b);
       }
     } catch (e) { box.innerHTML = ""; const p = document.createElement("p"); p.className = "err"; p.textContent = e.message; box.append(p); }
+  }
+
+  const NAMES = {};
+  let histTimer = null;
+  async function loadHistory() {
+    clearTimeout(histTimer);
+    const box = $("history");
+    try {
+      const { posts } = await api("/api/history");
+      box.replaceChildren();
+      if (!posts.length) { box.innerHTML = '<p class="empty">Nothing sent yet.</p>'; return; }
+      let pending = false;
+      for (const p of posts) {
+        const d = document.createElement("div"); d.className = "hi";
+        const t = document.createElement("b"); t.textContent = NAMES[p.asset] || p.asset.replace(/\.mp4$/, "");
+        const m = document.createElement("span"); m.className = "note";
+        m.textContent = (p.mode === "inbox" ? "Sent to drafts" : "Posted · " + (PRIV[p.privacy_level] || "")) + " · " + new Date(p.at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+        const st = document.createElement("span");
+        const done = ["PUBLISH_COMPLETE", "SEND_TO_USER_INBOX"].includes(p.status), bad = p.status === "FAILED";
+        if (!done && !bad) pending = true;
+        st.className = done ? "ok" : bad ? "bad" : "wait";
+        st.textContent = (STATUS[p.status] || p.status || "Checking…") + (bad && p.fail_reason ? " (" + p.fail_reason + ")" : "");
+        d.append(t, m, st); box.append(d);
+      }
+      if (pending) histTimer = setTimeout(loadHistory, 8000);
+    } catch (e) { box.innerHTML = ""; }
   }
 
   async function openComposer(it) {
@@ -296,14 +326,19 @@
   $("post").onclick = async () => {
     showErr(""); $("post").disabled = true;
     const inbox = $("modeInbox").checked;
-    setStatus("Sending to TikTok…", "", "This can take up to a minute.");
+    const t0 = Date.now();
+    const steps = [[0, "Getting the video from the vault…"], [6, "Uploading to TikTok…"], [20, "Still uploading. Big videos take up to a minute…"]];
+    const tick = () => { const s = Math.round((Date.now() - t0) / 1000); const cur = steps.filter((x) => s >= x[0]).pop()[1]; setStatus(cur, "", s + "s"); };
+    tick(); const ticker = setInterval(tick, 1000);
     try {
       const r = await api("/api/post", { method: "POST", body: JSON.stringify({
         asset: item.video_asset, mode: inbox ? "inbox" : "direct", consent: true,
         title: $("caption").value, privacy_level: $("privacy").value || null,
         allow_comment: $("allowComment").checked, allow_duet: $("allowDuet").checked, allow_stitch: $("allowStitch").checked,
         brand_organic: $("disclose").checked && $("yourBrand").checked, brand_content: $("disclose").checked && $("brandedContent").checked }) });
-      setStatus("Sent to TikTok.", "ok", "Processing can take a few minutes, and the post may take that long to appear on your profile.");
+      clearInterval(ticker);
+      setStatus(inbox ? "Sent to TikTok drafts." : "Sent to TikTok.", "ok", "Processing can take a few minutes, and the post may take that long to appear on your profile. Track it under Recent posts.");
+      loadHistory();
       let n = 0; clearInterval(poll);
       poll = setInterval(async () => {
         if (++n > 40) return clearInterval(poll);
@@ -311,10 +346,10 @@
           const st = await api("/api/status", { method: "POST", body: JSON.stringify({ publish_id: r.publish_id }) });
           const done = ["PUBLISH_COMPLETE", "SEND_TO_USER_INBOX", "FAILED"].includes(st.status);
           setStatus(STATUS[st.status] || st.status, st.status === "FAILED" ? "bad" : done ? "ok" : "", st.status === "FAILED" ? "Reason: " + (st.fail_reason || "unknown") : done ? "" : "Processing can take a few minutes, and the post may take that long to appear on your profile.");
-          if (done) clearInterval(poll);
+          if (done) { clearInterval(poll); loadHistory(); }
         } catch (e) { clearInterval(poll); }
       }, 5000);
-    } catch (e) { $("status").hidden = true; showErr(e.message); update(); }
+    } catch (e) { clearInterval(ticker); $("status").hidden = true; showErr(e.message); update(); }
   };
 
   show();

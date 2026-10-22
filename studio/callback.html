@@ -36,7 +36,14 @@
     const r = await fetch(STUDIO.api + "/api/callback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: q.get("code") }) });
     const j = await r.json();
     if (!r.ok) return fail(j.error || "Login failed.");
-    try { localStorage.setItem("cs_session", j.session); localStorage.setItem("cs_user", JSON.stringify(j.user)); sessionStorage.removeItem("cs_state"); } catch (e) {}
+    try {
+      let list = []; try { list = JSON.parse(localStorage.getItem("cs_accounts") || "[]"); } catch (e) {}
+      list = list.filter((a) => a.open_id !== j.open_id && a.open_id !== "legacy");
+      list.push({ open_id: j.open_id, session: j.session, user: j.user });
+      localStorage.setItem("cs_accounts", JSON.stringify(list));
+      localStorage.setItem("cs_active", j.open_id);
+      sessionStorage.removeItem("cs_state");
+    } catch (e) {}
     location.replace("./");
   } catch (e) { fail("Couldn't reach the Content Studio server."); }
 })();

@@ -24,6 +24,13 @@
   .acct img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: var(--panel); }
   .acct .who { display: grid; line-height: 1.2; }
   .acct .who small { color: var(--dim); font-size: 12px; }
+  .acct select { font: inherit; font-weight: 700; background: transparent; color: var(--paper); border: 0; padding: 0; width: auto; }
+  .acct select option { background: var(--ink); }
+  .acct { flex-wrap: wrap; }
+  .accts { display: grid; gap: 8px; }
+  .ac { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .ac img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
+  .ac .grow { flex: 1; min-width: 0; display: grid; } .ac .on { color: var(--ok); } .ac .off { color: var(--dim); }
   button, .btn { font: inherit; font-weight: 700; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--paper); padding: 10px 16px; border-radius: 999px; }
   button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
   .primary { background: var(--pink); border-color: var(--pink); color: var(--ink); }
@@ -84,8 +91,9 @@
     <div class="brand"><h1>Content <span>Studio</span></h1><small>Creek Bay Records</small></div>
     <div class="acct" id="acct" hidden>
       <img id="avatar" alt="">
-      <div class="who"><small>Posting as</small><b id="nick"></b></div>
-      <button class="ghost" id="logout">Disconnect</button>
+      <label class="who"><small>Posting as</small><select id="acctSel" aria-label="TikTok account"></select></label>
+      <button class="ghost" id="addAcct">+ Add account</button>
+      <button class="ghost" id="logout">Remove</button>
     </div>
   </header>
 
@@ -165,7 +173,10 @@
 
 
   <section class="panel" id="autoPanel" hidden style="margin-top:24px">
-    <h3>Daily auto-post</h3>
+    <h3>Connected TikTok accounts</h3>
+    <div class="accts" id="accts" style="margin-bottom:20px"><p class="empty">Loading…</p></div>
+    <p class="note" style="margin-bottom:20px">To connect another account, click <b>+ Add account</b> at the top. On TikTok's screen, tap <b>Switch account</b> (or log out of TikTok in this browser first) and sign in to the next account.</p>
+    <h3>Daily auto-post for the account above</h3>
     <div class="fields" style="max-width:640px">
       <p class="note">Content Studio can post this channel's queued video to TikTok every day at 5:17 PM ET, at the same time it goes to YouTube. Pick the channel for this account and the settings to use.</p>
       <label class="f">This TikTok account is for
@@ -204,7 +215,11 @@
   const PRIV = { PUBLIC_TO_EVERYONE: "Everyone", MUTUAL_FOLLOW_FRIENDS: "Friends", FOLLOWER_OF_CREATOR: "Followers", SELF_ONLY: "Only me" };
   const MUC = "https://www.tiktok.com/legal/page/global/music-usage-confirmation/en";
   const BCP = "https://www.tiktok.com/legal/page/global/bc-policy/en";
-  let session = store.get("cs_session"), creator = null, item = null, duration = null, poll = null;
+  // several TikTok accounts can be connected in this browser; one is active at a time
+  const loadAccts = () => { try { return JSON.parse(store.get("cs_accounts") || "[]"); } catch (e) { return []; } };
+  (() => { const old = store.get("cs_session"); if (old && !loadAccts().length) { let u = null; try { u = JSON.parse(store.get("cs_user") || "null"); } catch (e) {} store.set("cs_accounts", JSON.stringify([{ open_id: "legacy", session: old, user: u }])); store.set("cs_active", "legacy"); } store.del("cs_session"); store.del("cs_user"); })();
+  const activeAcct = () => { const l = loadAccts(); return l.find((a) => a.open_id === store.get("cs_active")) || l[0] || null; };
+  let session = (activeAcct() || {}).session || null, creator = null, item = null, duration = null, poll = null;
 
   async function api(path, opts = {}) {
     const r = await fetch(STUDIO.api + path, { ...opts, headers: { "Content-Type": "application/json", Authorization: "Bearer " + session, ...(opts.headers || {}) } });
@@ -213,28 +228,38 @@
     if (!r.ok) throw new Error(j.error || "Something went wrong.");
     return j;
   }
-  function logout() { store.del("cs_session"); store.del("cs_user"); session = null; show(); }
+  function logout() {
+    const a = activeAcct(); const rest = loadAccts().filter((x) => !a || x.open_id !== a.open_id);
+    store.set("cs_accounts", JSON.stringify(rest)); if (rest[0]) store.set("cs_active", rest[0].open_id); else store.del("cs_active");
+    session = rest[0] ? rest[0].session : null; item = null; $("composer").hidden = true; $("pick").hidden = false; show();
+  }
   $("logout").onclick = logout;
-
-  $("connect").onclick = () => {
+  $("acctSel").onchange = () => { store.set("cs_active", $("acctSel").value); session = (activeAcct() || {}).session; item = null; $("composer").hidden = true; $("pick").hidden = false; show(); };
+  const startLogin = (fresh) => {
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
     try { sessionStorage.setItem("cs_state", state); } catch (e) {}
     const u = new URL("https://www.tiktok.com/v2/auth/authorize/");
-    u.search = new URLSearchParams({ client_key: STUDIO.clientKey, scope: STUDIO.scopes, response_type: "code", redirect_uri: STUDIO.redirectUri, state }).toString();
+    const q = { client_key: STUDIO.clientKey, scope: STUDIO.scopes, response_type: "code", redirect_uri: STUDIO.redirectUri, state };
+    if (fresh) q.disable_auto_auth = "1";  // always show TikTok's screen so you can switch to another account
+    u.search = new URLSearchParams(q).toString();
     location.href = u.toString();
   };
+  $("connect").onclick = () => startLogin(false);
+  $("addAcct").onclick = () => startLogin(true);
 
   function setAccount(user, cr) {
     const av = (cr && cr.creator_avatar_url) || (user && user.avatar_url) || "";
     $("avatar").hidden = !av; if (av) $("avatar").src = av;
-    $("nick").textContent = (cr && cr.creator_nickname) || (user && user.display_name) || "TikTok account";
+    const list = loadAccts(), act = activeAcct();
+    if (act && cr && cr.creator_nickname) { act.user = { ...(act.user || {}), display_name: cr.creator_nickname, avatar_url: av }; store.set("cs_accounts", JSON.stringify(list.map((a) => a.open_id === act.open_id ? act : a))); }
+    $("acctSel").replaceChildren(...loadAccts().map((a) => new Option((a.user && a.user.display_name) || "TikTok account", a.open_id)));
+    if (act) $("acctSel").value = act.open_id;
   }
 
   async function show() {
     $("login").hidden = !!session; $("app").hidden = !session; $("acct").hidden = !session; if (!session) $("autoPanel").hidden = true;
     if (!session) return;
-    let cached = null; try { cached = JSON.parse(store.get("cs_user") || "null"); } catch (e) {}
-    setAccount(cached, null);
+    setAccount((activeAcct() || {}).user, null);
     await loadQueue(); loadHistory(); loadSettings();
   }
 
@@ -382,8 +407,27 @@
 
   // ---------- daily auto-post settings ----------
   let apCreator = null;
+  async function loadAccounts() {
+    const box = $("accts");
+    try {
+      const { accounts } = await api("/api/accounts");
+      box.replaceChildren();
+      for (const a of accounts) {
+        const d = document.createElement("div"); d.className = "ac";
+        if (a.avatar_url) { const i = document.createElement("img"); i.src = a.avatar_url; i.alt = ""; d.append(i); }
+        const g = document.createElement("div"); g.className = "grow";
+        const n = document.createElement("b"); n.textContent = a.display_name || "TikTok account";
+        const c = document.createElement("span"); c.className = "note"; c.textContent = a.channel_label ? "Channel: " + a.channel_label : "No channel picked yet";
+        g.append(n, c);
+        const st = document.createElement("span"); const on = a.autopost && a.autopost.enabled;
+        st.className = on ? "on" : "off"; st.textContent = on ? "Auto-post on · " + (PRIV[a.autopost.privacy_level] || "") : "Auto-post off";
+        d.append(g, st); box.append(d);
+      }
+      if (!accounts.length) box.innerHTML = '<p class="empty">No accounts connected.</p>';
+    } catch (e) { box.innerHTML = ""; }
+  }
   async function loadSettings() {
-    $("autoPanel").hidden = false;
+    $("autoPanel").hidden = false; loadAccounts();
     try {
       const [st, me] = await Promise.all([api("/api/settings"), api("/api/me")]);
       apCreator = me.creator;
@@ -412,6 +456,7 @@
       const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ channel: $("apChannel").value, autopost: {
         enabled: $("apOn").checked, privacy_level: $("apPrivacy").value || null,
         allow_comment: $("apComment").checked, allow_duet: $("apDuet").checked, allow_stitch: $("apStitch").checked } }) });
+      loadAccounts();
       $("apMsg").textContent = r.autopost.enabled ? "Saved. This channel's queued video will post here daily at 5:17 PM ET." : "Saved. Auto-post is off for this channel.";
     } catch (e) { $("apMsg").textContent = e.message; }
     apUpdate();

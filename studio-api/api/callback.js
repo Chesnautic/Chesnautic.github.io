@@ -15,5 +15,5 @@ export default handler(async (req) => {
   const entry = { ...(i >= 0 ? list[i] : {}), open_id: tok.open_id, display_name: user.display_name || "", avatar_url: user.avatar_url || "", scope: tok.scope, connected_at: new Date().toISOString() };
   if (i >= 0) list[i] = entry; else list.push(entry);
   await writeFile("tiktok/accounts.json", JSON.stringify(list, null, 1) + "\n", `Content Studio: connected TikTok ${entry.display_name || tok.open_id}`);
-  return { session: makeSession(tok.open_id), user: { display_name: entry.display_name, avatar_url: entry.avatar_url, channel: entry.channel || null }, scope: tok.scope };
+  return { session: makeSession(tok.open_id), open_id: tok.open_id, user: { display_name: entry.display_name, avatar_url: entry.avatar_url, channel: entry.channel || null }, scope: tok.scope };
 });

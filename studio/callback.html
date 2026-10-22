@@ -38,7 +38,8 @@
     if (!r.ok) return fail(j.error || "Login failed.");
     try {
       let list = []; try { list = JSON.parse(localStorage.getItem("cs_accounts") || "[]"); } catch (e) {}
-      list = list.filter((a) => a.open_id !== j.open_id && a.open_id !== "legacy");
+      // an entry saved before multi-account support has no account id; replace it only when it is the same account
+      list = list.filter((a) => a.open_id !== j.open_id && !(a.open_id === "legacy" && (!a.user || a.user.display_name === (j.user || {}).display_name)));
       list.push({ open_id: j.open_id, session: j.session, user: j.user });
       localStorage.setItem("cs_accounts", JSON.stringify(list));
       localStorage.setItem("cs_active", j.open_id);

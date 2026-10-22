@@ -163,6 +163,33 @@
     </section>
   </div>
 
+
+  <section class="panel" id="autoPanel" hidden style="margin-top:24px">
+    <h3>Daily auto-post</h3>
+    <div class="fields" style="max-width:640px">
+      <p class="note">Content Studio can post this channel's queued video to TikTok every day at 5:17 PM ET, at the same time it goes to YouTube. Pick the channel for this account and the settings to use.</p>
+      <label class="f">This TikTok account is for
+        <select id="apChannel"><option value="" disabled selected>Select a channel</option></select>
+      </label>
+      <label class="check"><input type="checkbox" id="apOn"> Post this channel's queued video here every day</label>
+      <div id="apOpts" class="fields" hidden>
+        <label class="f">Who can view auto-posted videos
+          <select id="apPrivacy"><option value="" disabled selected>Select</option></select>
+        </label>
+        <fieldset>
+          <legend>Allow users to</legend>
+          <label class="check" id="apCWrap"><input type="checkbox" id="apComment"> Comment</label>
+          <label class="check" id="apDWrap"><input type="checkbox" id="apDuet"> Duet</label>
+          <label class="check" id="apSWrap"><input type="checkbox" id="apStitch"> Stitch</label>
+        </fieldset>
+        <p class="note">Auto-posted videos are our own content with the caption from the queue, and are not marked as promotional. To post a video differently, post it by hand above before 5:17 PM; it won't be posted twice.</p>
+        <p class="declare">By turning on auto-post, you agree to TikTok's <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noopener">Music Usage Confirmation</a> for each video posted.</p>
+      </div>
+      <span><button class="primary" id="apSave" disabled>Save</button></span>
+      <p class="note" id="apMsg"></p>
+    </div>
+  </section>
+
   <footer>
     <span>Content Studio by Creek Bay Records</span>
     <a href="../privacy.html">Privacy Policy</a>
@@ -204,11 +231,11 @@
   }
 
   async function show() {
-    $("login").hidden = !!session; $("app").hidden = !session; $("acct").hidden = !session;
+    $("login").hidden = !!session; $("app").hidden = !session; $("acct").hidden = !session; if (!session) $("autoPanel").hidden = true;
     if (!session) return;
     let cached = null; try { cached = JSON.parse(store.get("cs_user") || "null"); } catch (e) {}
     setAccount(cached, null);
-    await loadQueue(); loadHistory();
+    await loadQueue(); loadHistory(); loadSettings();
   }
 
   async function loadQueue() {
@@ -350,6 +377,44 @@
         } catch (e) { clearInterval(poll); }
       }, 5000);
     } catch (e) { clearInterval(ticker); $("status").hidden = true; showErr(e.message); update(); }
+  };
+
+
+  // ---------- daily auto-post settings ----------
+  let apCreator = null;
+  async function loadSettings() {
+    $("autoPanel").hidden = false;
+    try {
+      const [st, me] = await Promise.all([api("/api/settings"), api("/api/me")]);
+      apCreator = me.creator;
+      $("apChannel").replaceChildren(new Option("Select a channel", ""));
+      $("apChannel").options[0].disabled = true;
+      for (const c of st.channels) $("apChannel").append(new Option(c.label, c.key));
+      $("apChannel").value = st.channel || "";
+      $("apPrivacy").replaceChildren(new Option("Select", "")); $("apPrivacy").options[0].disabled = true;
+      for (const p of apCreator.privacy_level_options || []) $("apPrivacy").append(new Option(PRIV[p] || p, p));
+      const ap = st.autopost || {};
+      $("apOn").checked = !!ap.enabled; $("apPrivacy").value = ap.privacy_level || "";
+      $("apComment").checked = !!ap.allow_comment; $("apDuet").checked = !!ap.allow_duet; $("apStitch").checked = !!ap.allow_stitch;
+      [["apCWrap", "apComment", apCreator.comment_disabled], ["apDWrap", "apDuet", apCreator.duet_disabled], ["apSWrap", "apStitch", apCreator.stitch_disabled]]
+        .forEach(([w, id, off]) => { $(id).disabled = !!off; $(w).classList.toggle("off", !!off); if (off) $(id).checked = false; });
+      apUpdate();
+    } catch (e) { $("apMsg").textContent = e.message; }
+  }
+  function apUpdate() {
+    $("apOpts").hidden = !$("apOn").checked;
+    $("apSave").disabled = !$("apChannel").value || ($("apOn").checked && !$("apPrivacy").value);
+  }
+  ["apChannel", "apOn", "apPrivacy", "apComment", "apDuet", "apStitch"].forEach((id) => $(id).addEventListener("change", () => { $("apMsg").textContent = ""; apUpdate(); }));
+  $("apSave").onclick = async () => {
+    $("apSave").disabled = true; $("apMsg").textContent = "Saving…";
+    try {
+      const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ channel: $("apChannel").value, autopost: {
+        enabled: $("apOn").checked, privacy_level: $("apPrivacy").value || null,
+        allow_comment: $("apComment").checked, allow_duet: $("apDuet").checked, allow_stitch: $("apStitch").checked } }) });
+      $("apMsg").textContent = r.autopost.enabled ? "Saved. This channel's queued video will post here daily at 5:17 PM ET." : "Saved. Auto-post is off for this channel.";
+    } catch (e) { $("apMsg").textContent = e.message; }
+    apUpdate();
   };
 
   show();

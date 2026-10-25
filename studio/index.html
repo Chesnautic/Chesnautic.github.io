@@ -80,6 +80,23 @@
   .hi b { font-size: 14px; } .hi .ok { color: var(--ok); } .hi .bad { color: var(--bad); } .hi .wait { color: var(--dim); }
   footer { margin-top: 48px; color: var(--dim); font-size: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
   footer a { color: var(--dim); }
+  .live { margin-top: 24px; }
+  .live-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .live-head h3 { margin: 0; }
+  .live-head .note b { color: var(--ok); font-weight: 600; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--pink); margin-right: 6px; vertical-align: 1px; }
+  @media (prefers-reduced-motion: no-preference) { .dot { animation: pulse 2s infinite; } @keyframes pulse { 50% { opacity: .35; } } }
+  .lchs { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); }
+  .lch { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+  .lch .n { font-family: "Anton", Impact, sans-serif; font-size: 28px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .lch .l { font-size: 12px; color: var(--dim); }
+  .lch .name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .up { color: var(--ok); } .flat { color: var(--dim); }
+  .lvids { display: grid; gap: 6px; margin-top: 14px; }
+  .lv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; border-bottom: 1px solid var(--line); padding: 8px 0; font-size: 14px; }
+  .lv a { text-decoration: none; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lv .r { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .lv .m { font-size: 12px; color: var(--dim); }
   [hidden] { display: none !important; }
   @media (prefers-reduced-motion: no-preference) { .qi, button { transition: border-color .15s, background .15s; } }
 </style>
@@ -96,6 +113,14 @@
       <button class="ghost" id="logout">Remove</button>
     </div>
   </header>
+
+  <section class="panel live" id="live" hidden>
+    <div class="live-head"><h3><span class="dot"></span>Live YouTube stats</h3><span class="note" id="liveAt">Loading…</span></div>
+    <div class="lchs" id="liveCh"></div>
+    <div class="lvids" id="liveVids"></div>
+    <p class="note err" id="liveErr" hidden></p>
+    <p class="note" style="margin-top:10px">Straight from YouTube, refreshes every minute while this page is open. Changes are since last night's snapshot. Deeper charts: the Content Studio dashboard.</p>
+  </section>
 
   <section class="hero" id="login" hidden>
     <h2>Publish our videos to TikTok</h2>
@@ -260,8 +285,43 @@
     $("login").hidden = !!session; $("app").hidden = !session; $("acct").hidden = !session; if (!session) $("autoPanel").hidden = true;
     if (!session) return;
     setAccount((activeAcct() || {}).user, null);
-    await loadQueue(); loadHistory(); loadSettings();
+    loadLive(); await loadQueue(); loadHistory(); loadSettings();
   }
+
+  // ---------- live YouTube stats ----------
+  const nf = new Intl.NumberFormat("en"), cf = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+  const big = (n) => n >= 10000 ? cf.format(n) : nf.format(n);
+  const chg = (n) => n == null ? "" : n > 0 ? "+" + nf.format(n) : n === 0 ? "±0" : nf.format(n);
+  const ago = (iso) => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 60 ? m + "m ago" : m < 1440 ? Math.round(m / 60) + "h ago" : Math.round(m / 1440) + "d ago"; };
+  let liveTimer = null;
+  async function loadLive() {
+    $("live").hidden = !session; if (!session) return;
+    try {
+      const d = await api("/api/live");
+      $("liveErr").hidden = true;
+      $("liveAt").textContent = "Updated " + new Date(d.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      $("liveCh").replaceChildren(...d.channels.filter((c) => c.connected).map((c) => {
+        const box = document.createElement("div"); box.className = "lch";
+        const name = document.createElement("div"); name.className = "name"; name.textContent = c.label;
+        const n = document.createElement("div"); n.className = "n"; n.textContent = big(c.views);
+        const l = document.createElement("div"); l.className = "l"; l.textContent = "views · " + nf.format(c.subscribers) + " subs";
+        const ch = document.createElement("div"); ch.className = "l " + (c.views_change > 0 ? "up" : "flat");
+        ch.textContent = c.views_change == null ? "" : chg(c.views_change) + " views" + (c.subs_change ? " · " + chg(c.subs_change) + " subs" : "") + " since last night";
+        box.append(name, n, l, ch); return box;
+      }));
+      $("liveVids").replaceChildren(...d.recent.map((v) => {
+        const row = document.createElement("div"); row.className = "lv";
+        const a = document.createElement("a"); a.href = "https://youtube.com/shorts/" + v.id; a.target = "_blank"; a.rel = "noopener"; a.textContent = v.title;
+        const r = document.createElement("div"); r.className = "r"; r.textContent = nf.format(v.views);
+        const m = document.createElement("div"); m.className = "m"; m.textContent = v.channel + " · " + ago(v.published);
+        const m2 = document.createElement("div"); m2.className = "m r " + (v.change > 0 ? "up" : ""); m2.textContent = v.change ? chg(v.change) + " new" : "";
+        row.append(a, r, m, m2); return row;
+      }));
+    } catch (e) { $("liveErr").hidden = false; $("liveErr").textContent = e.message; $("liveAt").textContent = ""; }
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(() => { if (document.visibilityState === "visible") loadLive(); }, 60000);
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && session) loadLive(); });
 
   async function loadQueue() {
     const box = $("queue");

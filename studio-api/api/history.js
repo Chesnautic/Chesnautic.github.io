@@ -1,7 +1,7 @@
 // GET -> this account's recent Content Studio posts with their live TikTok status
-import { handler, readSession, checkAllowed, accessToken, tt, readFile } from "../lib/core.js";
+import { handler, requireOwner, accessToken, tt, readFile } from "../lib/core.js";
 export default handler(async (req) => {
-  const openId = readSession(req); checkAllowed(openId);
+  const openId = await requireOwner(req);
   const f = await readFile("tiktok/posts.json");
   const mine = (f ? JSON.parse(f.text) : []).filter((p) => p.open_id === openId).slice(-8).reverse();
   if (!mine.length) return { posts: [] };

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Content Studio App</title>
+<meta name="description" content="Content Studio App: publish your own short videos to your TikTok account from your browser, with full control over caption, privacy and interaction settings.">
+<link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --pink: #FF1F5A; --ink: #0A0A0A; --panel: #151314; --line: rgba(244,241,236,.14); --paper: #F4F1EC; --dim: rgba(244,241,236,.65); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--ink); color: var(--paper); font-family: "Archivo", system-ui, sans-serif; line-height: 1.55; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 28px 20px 64px; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .logo { font-family: "Anton", Impact, sans-serif; text-transform: uppercase; font-size: 26px; text-decoration: none; color: var(--paper); }
+  .logo span { color: var(--pink); }
+  .btn { display: inline-block; font-weight: 700; text-decoration: none; border-radius: 999px; padding: 12px 20px; border: 1px solid var(--line); color: var(--paper); }
+  .primary { background: var(--pink); border-color: var(--pink); color: var(--ink); }
+  .hero { padding: 72px 0 48px; display: grid; gap: 20px; max-width: 680px; }
+  h1 { font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase; font-size: clamp(44px, 9vw, 84px); line-height: .95; }
+  .lead { color: var(--dim); font-size: 18px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; margin-top: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 8px; }
+  .card b { font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--pink); }
+  .card p { color: var(--dim); }
+  h2 { font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase; font-size: 32px; margin: 56px 0 14px; }
+  ol { padding-left: 20px; color: var(--dim); display: grid; gap: 8px; }
+  footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--dim); font-size: 13px; display: flex; gap: 18px; flex-wrap: wrap; }
+  footer a { color: var(--dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="logo" href="/">Content <span>Studio</span> App</a>
+    <a class="btn primary" href="/studio">Open Content Studio App</a>
+  </header>
+  <section class="hero">
+    <h1>Post your videos to TikTok from your browser</h1>
+    <p class="lead">Content Studio App is a free web tool for creators. Upload a short video you made, write the caption, choose who can see it and what viewers can do, and publish it straight to your TikTok account, or send it to your TikTok drafts to finish in the app.</p>
+    <p><a class="btn primary" href="/studio">Connect TikTok and start</a></p>
+  </section>
+  <div class="cards">
+    <div class="card"><b>Your videos</b><p>Upload an MP4, MOV or WebM up to 64 MB from your computer or phone. Your file is used only to post it and is deleted right after.</p></div>
+    <div class="card"><b>Your settings</b><p>Pick the audience (everyone, followers, friends or only you), and turn comments, duets and stitches on or off. Nothing is chosen for you.</p></div>
+    <div class="card"><b>Your account</b><p>Sign in with TikTok. Content Studio App only posts the videos you choose, on the account you connect, and never reads your followers, messages or other content.</p></div>
+  </div>
+  <h2>How it works</h2>
+  <ol>
+    <li>Click <b>Connect TikTok</b> and sign in on TikTok's own page.</li>
+    <li>Choose a video from your device and preview it.</li>
+    <li>Write your caption, choose who can view it and which interactions to allow, and add a content disclosure if it promotes a brand.</li>
+    <li>Click <b>Post to TikTok</b> (or send it to your drafts). You can watch the post status on the same page.</li>
+  </ol>
+  <footer>
+    <span>© 2026 Content Studio App</span>
+    <a href="/privacy-policy">Privacy Policy</a>
+    <a href="/terms-of-service">Terms of Service</a>
+    <a href="mailto:etheemusic@gmail.com">Contact</a>
+  </footer>
+</div>
+</body>
+</html>

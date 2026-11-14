@@ -1,7 +1,7 @@
 // GET -> live YouTube numbers for every Content Studio channel (public stats via the YouTube Data API key),
 //        compared with last night's snapshot (Content-Vault analytics/history.json).
 // Needs the Vercel setting YT_API_KEY (a Google API key with YouTube Data API v3 enabled). ~2 quota units per call.
-import { handler, readSession, checkAllowed, readFile, httpError } from "../lib/core.js";
+import { handler, requireOwner, readFile, httpError } from "../lib/core.js";
 
 const YT = "https://www.googleapis.com/youtube/v3";
 let cache = { at: 0, data: null };
@@ -17,7 +17,7 @@ async function yt(path, params) {
 const load = async (p, d) => { const f = await readFile(p); return f ? JSON.parse(f.text) : d; };
 
 export default handler(async (req) => {
-  checkAllowed(readSession(req));
+  await requireOwner(req);
   if (cache.data && Date.now() - cache.at < 60_000) return { ...cache.data, cached: true };
 
   const channels = await load("channels.json", {});

@@ -1,7 +1,7 @@
 // GET -> videos waiting in the Content-Vault queue (today and later), newest last
-import { handler, readSession, checkAllowed, ghJson, readFile } from "../lib/core.js";
+import { handler, requireOwner, ghJson, readFile } from "../lib/core.js";
 export default handler(async (req) => {
-  checkAllowed(readSession(req));
+  await requireOwner(req);
   const channels = JSON.parse((await readFile("channels.json")).text);
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
   const out = [];

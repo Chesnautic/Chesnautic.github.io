@@ -4,11 +4,21 @@
 //   GITHUB_TOKEN    - GitHub token with read/write access to Chesnautic/Content-Vault
 //   (the token-encryption key and the session-signing key are derived from TIKTOK_CLIENT_SECRET, so the daily
 //    GitHub Action can read the stored tokens with just TIKTOK_CLIENT_KEY + TIKTOK_CLIENT_SECRET as Actions secrets)
-//   ALLOWED_OPEN_IDS (optional) - comma list; if set, only these TikTok accounts can use the studio
+//   OWNER_OPEN_IDS (optional) - comma list of the owner's TikTok accounts (Creek Bay Records). If unset, the accounts
+//                    already listed in Content-Vault tiktok/accounts.json are the owner's.
+//   BLOB_READ_WRITE_TOKEN - Vercel Blob store for creators' uploads (deleted right after they post)
+//
+// Two kinds of users (Nov 14, 2026, E: "We can make it so other people are able to use the content studio, but they
+// wouldn't give them access to our channels obviously"):
+//   owner   - E's own TikTok accounts: the Content-Vault queue, history, auto-post settings, live stats.
+//   creator - anyone else: uploads their own video and posts it to their own TikTok. Nothing about them is stored
+//             in Content-Vault; their TikTok login lives only inside their own encrypted session.
 import crypto from "node:crypto";
 
-export const SITE = "https://chesnautic.github.io";
-export const REDIRECT_URI = `${SITE}/studio/callback.html`;
+export const SITE = "https://contentstudioapp.vercel.app";
+export const REDIRECT_URI = `${SITE}/studio/callback`;
+// the old GitHub Pages studio keeps working until the TikTok app settings point at the new site
+const OLD_SITE = "https://chesnautic.github.io", REDIRECTS = [REDIRECT_URI, `${OLD_SITE}/studio/callback.html`];
 export const REPO = "Chesnautic/Content-Vault";
 const TT = "https://open.tiktokapis.com/v2";
 const env = (k) => {
@@ -24,8 +34,10 @@ export function httpError(status, message) { const e = new Error(message); e.sta
 // ---------- request plumbing ----------
 export function handler(fn) {
   return async (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", SITE);
+    res.setHeader("Access-Control-Allow-Origin", req.headers.origin === OLD_SITE ? OLD_SITE : SITE);
+    res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Expose-Headers", "X-Session");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Cache-Control", "no-store");
     if (req.method === "OPTIONS") return res.status(204).end();
@@ -47,25 +59,41 @@ export async function body(req) {
 }
 
 // ---------- sessions (HMAC-signed, 7 days) ----------
+// payload: {o: open_id, e: expiry, r: "owner"|"creator", t?: encrypted TikTok token record (creators only)}
 const b64u = (b) => Buffer.from(b).toString("base64url");
-export function makeSession(openId) {
-  const p = b64u(JSON.stringify({ o: openId, e: Date.now() + 7 * 864e5 }));
+export function makeSession(openId, role = "owner", tokRec = null) {
+  const pl = { o: openId, e: Date.now() + 7 * 864e5, r: role };
+  if (tokRec) pl.t = encrypt(tokRec);
+  const p = b64u(JSON.stringify(pl));
   return `${p}.${b64u(crypto.createHmac("sha256", derive("content-studio-session")).update(p).digest())}`;
 }
-export function readSession(req) {
+export function readAuth(req) {
   const raw = (req.headers.authorization || "").replace(/^Bearer\s+/i, "") || (req.query && req.query.s) || "";
   const [p, sig] = raw.split(".");
   if (!p || !sig) throw httpError(401, "Please connect your TikTok account first.");
   const good = b64u(crypto.createHmac("sha256", derive("content-studio-session")).update(p).digest());
   if (sig.length !== good.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good))) throw httpError(401, "Your session isn't valid. Connect TikTok again.");
-  const { o, e } = JSON.parse(Buffer.from(p, "base64url").toString());
+  const { o, e, r, t } = JSON.parse(Buffer.from(p, "base64url").toString());
   if (Date.now() > e) throw httpError(401, "Your session expired. Connect TikTok again.");
-  return o;
+  return { openId: o, owner: (r || "owner") === "owner", tok: t || null };
 }
-export function checkAllowed(openId) {
-  const list = (process.env.ALLOWED_OPEN_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (list.length && !list.includes(openId)) throw httpError(403, "This TikTok account isn't set up for Content Studio.");
+export function readSession(req) { return readAuth(req).openId; }
+// owner-only endpoints (the Content-Vault queue, channels, stats, auto-post)
+export async function requireOwner(req) {
+  const a = readAuth(req);
+  if (!a.owner || !(await isOwner(a.openId))) throw httpError(403, "This part of Content Studio is only for its owner.");
+  return a.openId;
 }
+let ownerCache = null;
+export async function isOwner(openId) {
+  const list = (process.env.OWNER_OPEN_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (list.length) return list.includes(openId);
+  if (!ownerCache) { const f = await readFile("tiktok/accounts.json"); ownerCache = (f ? JSON.parse(f.text) : []).map((a) => a.open_id); }
+  return ownerCache.includes(openId);
+}
+export function checkAllowed() { /* everyone may sign in; owner-only parts use requireOwner */ }
+// a short folder name for a creator's uploads (never the raw open_id)
+export const userKey = (openId) => crypto.createHash("sha256").update("cs-user:" + openId).digest("hex").slice(0, 20);
 
 // ---------- encryption (AES-256-GCM) ----------
 const key = () => derive("content-studio-token-key");
@@ -115,8 +143,9 @@ async function ttForm(path, params) {
   if (!r.ok || j.error) throw httpError(400, `TikTok login failed: ${j.error_description || j.error || r.status}`);
   return j;
 }
-export async function exchangeCode(code) {
-  return ttForm("/oauth/token/", { client_key: env("TIKTOK_CLIENT_KEY"), client_secret: env("TIKTOK_CLIENT_SECRET"), code, grant_type: "authorization_code", redirect_uri: REDIRECT_URI });
+export async function exchangeCode(code, redirectUri) {
+  const redirect_uri = REDIRECTS.includes(redirectUri) ? redirectUri : REDIRECT_URI;
+  return ttForm("/oauth/token/", { client_key: env("TIKTOK_CLIENT_KEY"), client_secret: env("TIKTOK_CLIENT_SECRET"), code, grant_type: "authorization_code", redirect_uri });
 }
 async function refresh(refreshToken) {
   return ttForm("/oauth/token/", { client_key: env("TIKTOK_CLIENT_KEY"), client_secret: env("TIKTOK_CLIENT_SECRET"), grant_type: "refresh_token", refresh_token: refreshToken });
@@ -142,13 +171,26 @@ export async function tt(path, token, { method = "POST", json, query = "" } = {}
 
 // stored token record: tiktok/tokens/<open_id>.enc in Content-Vault
 const tokenPath = (openId) => `tiktok/tokens/${openId.replace(/[^A-Za-z0-9_-]/g, "_")}.enc`;
-export async function saveTokens(tok) {
-  const rec = { open_id: tok.open_id, access_token: tok.access_token, refresh_token: tok.refresh_token, scope: tok.scope,
+export function tokenRecord(tok) {
+  return { open_id: tok.open_id, access_token: tok.access_token, refresh_token: tok.refresh_token, scope: tok.scope,
     expires_at: Date.now() + (tok.expires_in - 120) * 1000, refresh_expires_at: Date.now() + tok.refresh_expires_in * 1000 };
+}
+export async function saveTokens(tok) {
+  const rec = tokenRecord(tok);
   await writeFile(tokenPath(tok.open_id), encrypt(rec), "Content Studio: save TikTok login");
   return rec;
 }
-export async function accessToken(openId) {
+export async function accessToken(openId, req, res) {
+  const a = req ? readAuth(req) : { owner: true };
+  if (!a.owner) {
+    let rec;
+    try { rec = decrypt(a.tok); } catch { throw httpError(401, "Your session isn't valid. Connect TikTok again."); }
+    if (Date.now() > rec.expires_at) {
+      rec = tokenRecord({ ...(await refresh(rec.refresh_token)), open_id: openId });
+      if (res) res.setHeader("X-Session", makeSession(openId, "creator", rec));
+    }
+    return rec.access_token;
+  }
   const f = await readFile(tokenPath(openId));
   if (!f) throw httpError(401, "This TikTok account isn't connected. Connect it again.");
   let rec;

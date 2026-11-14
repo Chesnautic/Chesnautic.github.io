@@ -1,5 +1,27 @@
 {
+  "cleanUrls": true,
+  "trailingSlash": false,
   "functions": {
-    "api/post.js": { "maxDuration": 60 }
-  }
+    "api/post.js": {
+      "maxDuration": 60
+    }
+  },
+  "redirects": [
+    {
+      "source": "/privacy",
+      "destination": "/privacy-policy",
+      "permanent": true
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms-of-service",
+      "permanent": true
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cleanup",
+      "schedule": "17 7 * * *"
+    }
+  ]
 }

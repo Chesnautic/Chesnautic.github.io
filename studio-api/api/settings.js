@@ -1,10 +1,10 @@
 // GET  -> which channel this TikTok account is for + its auto-post settings
 // POST {channel, autopost: {enabled, privacy_level, allow_comment, allow_duet, allow_stitch}}
 //      -> saves them to Content-Vault tiktok/accounts.json + tiktok/autopost.json (the daily GitHub Action reads these)
-import { handler, body, readSession, checkAllowed, accessToken, tt, readFile, writeFile, httpError } from "../lib/core.js";
+import { handler, body, requireOwner, accessToken, tt, readFile, writeFile, httpError } from "../lib/core.js";
 const load = async (p, d) => { const f = await readFile(p); return f ? JSON.parse(f.text) : d; };
 export default handler(async (req) => {
-  const openId = readSession(req); checkAllowed(openId);
+  const openId = await requireOwner(req);
   const channels = JSON.parse((await readFile("channels.json")).text);
   const chList = Object.keys(channels).filter((k) => !k.startsWith("_")).map((k) => ({ key: k, label: channels[k].label || k }));
   const accounts = await load("tiktok/accounts.json", []);

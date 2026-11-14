@@ -21,7 +21,7 @@ export default handler(async (req) => {
   if (cache.data && Date.now() - cache.at < 60_000) return { ...cache.data, cached: true };
 
   const channels = await load("channels.json", {});
-  const keys = Object.keys(channels).filter((k) => !k.startsWith("_"));
+  const keys = Object.keys(channels).filter((k) => !k.startsWith("_") && !channels[k].retired);   // retired shows share their channel with the new one
   const [hist, ...analytics] = await Promise.all([load("analytics/history.json", []), ...keys.map((k) => load(`analytics/${k}.json`, null))]);
 
   // channel ids: saved by yt_stats.py, or worked out from one of the channel's videos

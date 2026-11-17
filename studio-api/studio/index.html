@@ -258,6 +258,7 @@
   // several TikTok accounts can be connected in this browser; one is active at a time
   const loadAccts = () => { try { return JSON.parse(store.get("cs_accounts") || "[]"); } catch (e) { return []; } };
   (() => { const old = store.get("cs_session"); if (old && !loadAccts().length) { let u = null; try { u = JSON.parse(store.get("cs_user") || "null"); } catch (e) {} store.set("cs_accounts", JSON.stringify([{ open_id: "legacy", session: old, user: u }])); store.set("cs_active", "legacy"); } store.del("cs_session"); store.del("cs_user"); })();
+  try { if (new URLSearchParams(location.search).get("creator") === "1") store.set("cs_cv", "1"); } catch (e) {}   // /studio?creator=1 switches Creator view on before anything loads
   const creatorView = () => store.get("cs_cv") === "1";   // owner-only switch: show the screen any other creator sees (for the TikTok demo video)
   const activeAcct = () => { const l = loadAccts(); return l.find((a) => a.open_id === store.get("cs_active")) || l[0] || null; };
   let session = (activeAcct() || {}).session || null, creator = null, item = null, duration = null, poll = null;

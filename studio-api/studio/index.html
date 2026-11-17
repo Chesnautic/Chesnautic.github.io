@@ -112,6 +112,7 @@
     <div class="brand"><a href="/" style="text-decoration:none"><h1>Content <span>Studio</span> App</h1></a></div>
     <div class="acct" id="acct" hidden>
       <img id="avatar" alt="">
+      <label class="who" id="cvWrap" hidden><small>Owner only</small><span><input type="checkbox" id="cv"> Creator view</span></label>
       <label class="who"><small>Posting as</small><select id="acctSel" aria-label="TikTok account"></select></label>
       <button class="ghost" id="addAcct">+ Add account</button>
       <button class="ghost" id="logout">Remove</button>
@@ -257,6 +258,7 @@
   // several TikTok accounts can be connected in this browser; one is active at a time
   const loadAccts = () => { try { return JSON.parse(store.get("cs_accounts") || "[]"); } catch (e) { return []; } };
   (() => { const old = store.get("cs_session"); if (old && !loadAccts().length) { let u = null; try { u = JSON.parse(store.get("cs_user") || "null"); } catch (e) {} store.set("cs_accounts", JSON.stringify([{ open_id: "legacy", session: old, user: u }])); store.set("cs_active", "legacy"); } store.del("cs_session"); store.del("cs_user"); })();
+  const creatorView = () => store.get("cs_cv") === "1";   // owner-only switch: show the screen any other creator sees (for the TikTok demo video)
   const activeAcct = () => { const l = loadAccts(); return l.find((a) => a.open_id === store.get("cs_active")) || l[0] || null; };
   let session = (activeAcct() || {}).session || null, creator = null, item = null, duration = null, poll = null;
 
@@ -275,6 +277,7 @@
     session = rest[0] ? rest[0].session : null; item = null; $("composer").hidden = true; $("pick").hidden = false; show();
   }
   $("logout").onclick = logout;
+  $("cv").onchange = () => { if ($("cv").checked) store.set("cs_cv", "1"); else store.del("cs_cv"); item = null; $("composer").hidden = true; $("pick").hidden = false; show(); };
   $("acctSel").onchange = () => { store.set("cs_active", $("acctSel").value); session = (activeAcct() || {}).session; item = null; $("composer").hidden = true; $("pick").hidden = false; show(); };
   const startLogin = (fresh) => {
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -293,7 +296,8 @@
     $("avatar").hidden = !av; if (av) $("avatar").src = av;
     const list = loadAccts(), act = activeAcct();
     if (act && cr && cr.creator_nickname) { act.user = { ...(act.user || {}), display_name: cr.creator_nickname, avatar_url: av }; store.set("cs_accounts", JSON.stringify(list.map((a) => a.open_id === act.open_id ? act : a))); }
-    $("acctSel").replaceChildren(...loadAccts().map((a) => new Option((a.user && a.user.display_name) || "TikTok account", a.open_id)));
+    const shown = (act && act.owner && creatorView()) ? [act] : loadAccts();   // creator view lists only the active account
+    $("acctSel").replaceChildren(...shown.map((a) => new Option((a.user && a.user.display_name) || "TikTok account", a.open_id)));
     if (act) $("acctSel").value = act.open_id;
   }
 
@@ -305,7 +309,10 @@
     if (act && act.owner === undefined) {   // logged in before roles existed: ask the server once
       try { const me = await api("/api/me"); act.owner = !!me.owner; store.set("cs_accounts", JSON.stringify(loadAccts().map((x) => x.open_id === act.open_id ? act : x))); } catch (e) {}
     }
-    const owner = !!(activeAcct() || {}).owner;
+    const realOwner = !!(activeAcct() || {}).owner, cvOn = realOwner && creatorView();
+    $("cvWrap").hidden = !realOwner; $("cv").checked = cvOn;
+    const owner = realOwner && !cvOn;
+    if (realOwner) setAccount((activeAcct() || {}).user, creator);
     $("ownerQueue").hidden = !owner; $("live").hidden = !owner; $("autoPanel").hidden = !owner;
     if (owner) { loadLive(); await loadQueue(); loadHistory(); loadSettings(); }
   }

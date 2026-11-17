@@ -314,7 +314,7 @@
     const owner = realOwner && !cvOn;
     if (realOwner) setAccount((activeAcct() || {}).user, creator);
     $("ownerQueue").hidden = !owner; $("live").hidden = !owner; $("autoPanel").hidden = !owner;
-    if (owner) { loadLive(); await loadQueue(); loadHistory(); loadSettings(); }
+    if (owner) { loadLive(); await loadQueue(); if (creatorView()) return; loadHistory(); loadSettings(); }
   }
 
   // ---------- live YouTube stats ----------
@@ -324,9 +324,10 @@
   const ago = (iso) => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 60 ? m + "m ago" : m < 1440 ? Math.round(m / 60) + "h ago" : Math.round(m / 1440) + "d ago"; };
   let liveTimer = null;
   async function loadLive() {
-    if (!session || !(activeAcct() || {}).owner) return;
+    if (!session || !(activeAcct() || {}).owner || creatorView()) return;
     try {
       const d = await api("/api/live");
+      if (creatorView()) return;
       $("liveErr").hidden = true;
       $("liveAt").textContent = "Updated " + new Date(d.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
       $("liveCh").replaceChildren(...d.channels.filter((c) => c.connected).map((c) => {
@@ -524,6 +525,7 @@
     } catch (e) { box.innerHTML = ""; }
   }
   async function loadSettings() {
+    if (creatorView()) return;   // creator view never shows the owner's channels
     $("autoPanel").hidden = false; loadAccounts();
     try {
       const [st, me] = await Promise.all([api("/api/settings"), api("/api/me")]);
